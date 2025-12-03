@@ -74,6 +74,7 @@ export default defineConfig(
       '@typescript-eslint/no-empty-function'                      : ['off'],
       '@typescript-eslint/no-floating-promises'                   : ['off'],  // @NEXT turn this back on
       '@typescript-eslint/no-misused-promises'                    : ['off'],  // @NEXT turn this back on
+      // '@typescript-eslint/no-misused-promises'                    : ['error', { "checksVoidReturn": false }],
       '@typescript-eslint/no-this-alias'                          : ['off'],
       '@typescript-eslint/no-unnecessary-condition'               : ['off'],
       '@typescript-eslint/no-unsafe-argument'                     : ['off'],

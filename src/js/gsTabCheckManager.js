@@ -217,7 +217,7 @@ export const gsTabCheckManager = (function() {
     }
 
     // Make sure tab is registered as a 'view' of the extension
-    const context = await tgs.getInternalContextByTabId(tab.id);
+    const context = await gsChrome.contextGetByTabId(tab.id);
     if (!context) {
       gsUtils.log( tab.id, QUEUE_ID, 'Could not find an internal view for suspended tab.', tab );
       if (!executionProps.resuspended) {
@@ -294,7 +294,7 @@ export const gsTabCheckManager = (function() {
 
   async function resuspendSuspendedTab(tab) {
     gsUtils.log(tab.id, QUEUE_ID, 'Resuspending unresponsive suspended tab.');
-    const context = await tgs.getInternalContextByTabId(tab.id);
+    const context = await gsChrome.contextGetByTabId(tab.id);
     if (context) {
       await tgs.setTabStatePropForTabId( tab.id, tgs.STATE_DISABLE_UNSUSPEND_ON_RELOAD, true );
     }

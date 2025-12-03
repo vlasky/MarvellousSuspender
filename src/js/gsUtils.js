@@ -154,8 +154,6 @@ export const gsUtils = {
     if (
       url.indexOf('about') === 0 ||
       url.indexOf('chrome') === 0 ||
-      // webstore urls no longer seem to crash the extension :D
-      // url.indexOf('chrome.google.com/webstore') >= 0 ||
       gsUtils.isBlockedFileTab(tab)
     ) {
       return true;
@@ -634,7 +632,7 @@ export const gsUtils = {
           const updateTheme = changedSettingKeys.includes(gsStorage.THEME);
           const updatePreviewMode = changedSettingKeys.includes(gsStorage.SCREEN_CAPTURE);
           if (updateTheme || updatePreviewMode) {
-            const context = await tgs.getInternalContextByTabId(tab.id);
+            const context = await gsChrome.contextGetByTabId(tab.id);
             if (context) {
               if (updateTheme) {
                 gsStorage.getOption(gsStorage.THEME).then((theme) => {

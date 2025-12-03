@@ -297,7 +297,7 @@ export const gsSession = (function() {
       gsUpdated = true;
 
       //update updated views
-      const contexts = await tgs.getInternalContextsByViewName('updated');
+      const contexts = await gsChrome.contextsGetByViewName('updated');
       if (contexts.length > 0) {
         for (const context of contexts) {
           chrome.tabs.sendMessage(context.tabId, { action: 'toggleUpdated', tabId: context.tabId });
@@ -557,7 +557,7 @@ export const gsSession = (function() {
   }
 
   // suspendMode controls whether the tabs are restored as suspended or unsuspended
-  // 0: Leave the urls as they are (suspended stay suspended, ussuspended stay unsuspended)
+  // 0: Leave the urls as they are (suspended stay suspended, unsuspended stay unsuspended)
   // 1: Open all unsuspended tabs as suspended
   // 2: Open all suspended tabs as unsuspended
   async function restoreSessionWindow( sessionWindow, existingWindow, sessionTabGroups, suspendMode ) {
@@ -707,7 +707,7 @@ export const gsSession = (function() {
     // gsUtils.log('gsUtils', 'createNewTabFromSessionTab newTab', newTab );
 
     // Update recovery view (if it exists)
-    // const contexts = await tgs.getInternalContextsByViewName('recovery');
+    // const contexts = await gsChrome.contextsGetByViewName('recovery');
     // for (const context of contexts) {
     //   // chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
     //   // @TODO update recovery page to receive a message instead of this direct call

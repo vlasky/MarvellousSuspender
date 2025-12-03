@@ -226,4 +226,19 @@ export const gsChrome = {
       });
     });
   },
+
+  contextGetByTabId: async (tabId) => {
+    const contexts  = await chrome.runtime.getContexts({ tabIds: [tabId] });
+    gsUtils.highlight('contextGetByTabId contexts', contexts);
+    gsUtils.highlight('contextGetByTabId unfiltered', await chrome.runtime.getContexts({}));
+    return contexts.length === 1 ? contexts[0] : null;
+  },
+  contextsGetByViewName: async (viewName) => {
+    const contexts  = await chrome.runtime.getContexts({});
+    gsUtils.highlight('contextsGetByViewName contexts', contexts);
+    const filtered  = contexts.filter((context) => context.documentUrl?.includes(viewName));
+    gsUtils.highlight('contextsGetByViewName filtered', filtered);
+    return filtered;
+  },
+
 };
