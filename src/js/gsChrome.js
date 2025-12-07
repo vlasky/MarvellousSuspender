@@ -250,7 +250,7 @@ export const gsChrome = {
   contextGetByTabId: async (tabId) => {
     if (!tabId) return;
     const contexts  = await chrome.runtime.getContexts({ tabIds: [tabId] });
-    gsUtils.highlight('contextGetByTabId contexts', contexts[0]?.tabId, tabId);
+    gsUtils.log('contextGetByTabId', contexts[0]?.tabId, tabId);
     if (contexts.length === 1) {
       return contexts[0];
     }
@@ -259,7 +259,7 @@ export const gsChrome = {
     // Vivaldi bug reported: VB-122957
     // https://forum.vivaldi.net/search?in=titlesposts&term=122957&matchWords=any
     const tab     = await chrome.tabs.get(tabId);
-    gsUtils.highlight('contextGetByTabId fallback tab', tabId, tab.id);
+    gsUtils.log('contextGetByTabId fallback', tabId, tab.id);
     if (tab.url?.match(new RegExp(EXTENSION_URL_MATCH, 'i'))) {
       return { tabId };
     }
@@ -272,9 +272,8 @@ export const gsChrome = {
    */
   contextsGetByViewName: async (viewName) => {
     const contexts    = await chrome.runtime.getContexts({});
-    gsUtils.highlight('contextsGetByViewName contexts', contexts);
     const filtered    = contexts.filter((context) => context.documentUrl?.includes(viewName));
-    gsUtils.highlight('contextsGetByViewName filtered', filtered);
+    gsUtils.log('contextsGetByViewName', filtered);
     if (filtered.length) {
       return filtered;
     }
@@ -285,9 +284,8 @@ export const gsChrome = {
     if (contexts.length === 1) {
       const tabs      = await chrome.tabs.query({});
       const filtered  = tabs.filter((tab) => tab.url?.match(new RegExp(`${EXTENSION_URL_MATCH}/${viewName}`, 'i')));
-      gsUtils.highlight('contextsGetByViewName fallback filtered', filtered);
       const mapped    = filtered.map((tab) => ({ tabId: tab.id }));
-      gsUtils.highlight('contextsGetByViewName fallback mapped', mapped);
+      gsUtils.log('contextsGetByViewName fallback', mapped);
       return mapped;
     }
     return [];

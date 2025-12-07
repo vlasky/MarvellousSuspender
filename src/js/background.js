@@ -196,8 +196,7 @@ import  { tgs }                   from './tgs.js';
     return false;
   }
 
-  gsUtils.highlight('background', 'externalMessageRequestListener', '@TEST this will need to be async eventually');
-  function externalMessageRequestListener(request, sender, sendResponse) {
+  async function externalMessageRequestListener(request, sender, sendResponse) {
     gsUtils.log('background', 'externalMessageRequestListener', request, sender);
 
     if (!request.action || !['suspend', 'unsuspend'].includes(request.action)) {
@@ -205,58 +204,57 @@ import  { tgs }                   from './tgs.js';
       return;
     }
 
-    // wrap this in an anonymous async function so we can use await
-    (async function() {
-      let tab;
-      if (request.tabId) {
-        if (typeof request.tabId !== 'number') {
-          sendResponse('Error: tabId must be an int');
-          return;
-        }
-        tab = await gsChrome.tabsGet(request.tabId);
-        if (!tab) {
-          sendResponse('Error: no tab found with id: ' + request.tabId);
-          return;
-        }
-      } else {
-        tab = await new Promise(r => {
-          tgs.getCurrentlyActiveTab(r);
-        });
+    let tab;
+    if (request.tabId) {
+      if (typeof request.tabId !== 'number') {
+        sendResponse('Error: tabId must be an int');
+        return;
       }
+      tab = await gsChrome.tabsGet(request.tabId);
       if (!tab) {
-        sendResponse('Error: failed to find a target tab');
+        sendResponse('Error: no tab found with id: ' + request.tabId);
+        return;
+      }
+    }
+    else {
+      tab = await new Promise(r => {
+        tgs.getCurrentlyActiveTab(r);
+      });
+    }
+
+    if (!tab) {
+      sendResponse('Error: failed to find a target tab');
+      return;
+    }
+
+    if (request.action === 'suspend') {
+      if (gsUtils.isSuspendedTab(tab, true)) {
+        sendResponse('Error: tab is already suspended');
         return;
       }
 
-      if (request.action === 'suspend') {
-        if (gsUtils.isSuspendedTab(tab, true)) {
-          sendResponse('Error: tab is already suspended');
-          return;
-        }
+      gsTabSuspendManager.queueTabForSuspension(tab, 1);
+      sendResponse();
+      return;
+    }
 
-        gsTabSuspendManager.queueTabForSuspension(tab, 1);
-        sendResponse();
+    if (request.action === 'unsuspend') {
+      if (!gsUtils.isSuspendedTab(tab)) {
+        sendResponse('Error: tab is not suspended');
         return;
       }
 
-      if (request.action === 'unsuspend') {
-        if (!gsUtils.isSuspendedTab(tab)) {
-          sendResponse('Error: tab is not suspended');
-          return;
-        }
-
-        await tgs.unsuspendTab(tab);
-        sendResponse();
-        return;
-      }
-    })();
+      await tgs.unsuspendTab(tab);
+      sendResponse();
+      return;
+    }
     return true;
   }
 
 
   // Listeners must part of the top-level evaluation of the service worker
-  gsUtils.highlight('background', 'contextMenuListener', '@TEST this will need to be async eventually');
-  function contextMenuListener(info, tab) {
+  async function contextMenuListener(info, tab) {
+    gsUtils.log('background', 'contextMenuListener', info.menuItemId);
     switch (info.menuItemId) {
       case 'open_link_in_suspended_tab':
         tgs.openLinkInSuspendedTab(tab, info.linkUrl);
@@ -298,7 +296,7 @@ import  { tgs }                   from './tgs.js';
         tgs.unsuspendAllTabsInAllWindows();
         break;
       case 'open_session_history':
-        chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
         break;
       default:
         break;
@@ -306,8 +304,8 @@ import  { tgs }                   from './tgs.js';
   }
 
   // Listeners must part of the top-level evaluation of the service worker
-  gsUtils.highlight('background', 'commandListener', '@TEST this will need to be async eventually');
-  function commandListener(command) {
+  async function commandListener(command) {
+    gsUtils.log('background', 'commandListener', command);
     switch (command) {
       case '1-suspend-tab':
         tgs.toggleSuspendedStateOfHighlightedTab();
@@ -340,7 +338,7 @@ import  { tgs }                   from './tgs.js';
         tgs.unsuspendAllTabsInAllWindows();
         break;
       case '7-open_session_history':
-        chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
         break;
     }
   }
@@ -451,9 +449,10 @@ import  { tgs }                   from './tgs.js';
 
   // Listeners must part of the top-level evaluation of the service worker
   function addMiscListeners() {
-    //add listener for battery state changes
+    // add listener for battery state changes
+    // @TODO: It appears service workers ( via Manifest V3 ) do not have access to getBattery
+    // gsUtils.log('background', '@TODO addMiscListeners', 'typeof getBattery', typeof navigator.getBattery);
     if ('getBattery' in navigator && typeof navigator.getBattery === 'function') {
-      gsUtils.highlight('background', 'addMiscListeners', '@TEST typeof getBattery', typeof navigator.getBattery);
       navigator.getBattery().then(async (battery) => {
         await tgs.setCharging(battery.charging);
 

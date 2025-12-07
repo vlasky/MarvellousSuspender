@@ -483,7 +483,7 @@ export const tgs = (function() {
       // chrome.tabs.update if this is set to true. This gets unset again after tab
       // has reloaded via the STATE_SET_AUTODISCARDABLE flag.
       gsUtils.log(tab.id, 'Unsuspending tab via chrome.tabs.update');
-      chrome.tabs.update(tab.id, { url: originalUrl, autoDiscardable: false });
+      await chrome.tabs.update(tab.id, { url: originalUrl, autoDiscardable: false });
       return;
     }
 
@@ -544,7 +544,7 @@ export const tgs = (function() {
         return;
       }
       gsUtils.log( tab.id, 'Unsuspended tab has been discarded, Url', tab.url );
-      gsTabDiscardManager.handleDiscardedUnsuspendedTab(tab); //async. unhandled promise.
+      await gsTabDiscardManager.handleDiscardedUnsuspendedTab(tab); //async. unhandled promise.
 
       // When a tab is discarded the tab id changes. We need up-to-date UNSUSPENDED
       // tabIds in the current session otherwise crash recovery will not work
@@ -593,7 +593,7 @@ export const tgs = (function() {
           removeTabHistoryForUnuspendedTab(historyUrlToRemove);
         }
         if (setAutodiscardable) {
-          gsChrome.tabsUpdate(tab.id, { autoDiscardable: true });
+          await gsChrome.tabsUpdate(tab.id, { autoDiscardable: true });
         }
 
         //init loaded tab
@@ -745,7 +745,7 @@ export const tgs = (function() {
     }
     await gsStorage.saveStorage('session', 'gsCurrentStationaryTabIdByWindowId', statTabByWindow);
 
-    deleteTabStateForTabId(tabId);
+    await deleteTabStateForTabId(tabId);
   }
 
   async function getSuspensionToggleHotkey() {
@@ -818,7 +818,7 @@ export const tgs = (function() {
         const contexts = await gsChrome.contextsGetByViewName('suspended');
         for (const context of contexts) {
           if (context.tabId) {
-            chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
+            await chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
           }
         }
       }
@@ -838,8 +838,8 @@ export const tgs = (function() {
     }
 
     //update icon
-    const status = await new Promise(resolve => {
-      calculateTabStatus(focusedTab, contentScriptStatus, resolve);
+    const status = await new Promise(async (resolve) => {
+      await calculateTabStatus(focusedTab, contentScriptStatus, resolve);
     });
 
     //if this tab still has focus then update icon

@@ -1,5 +1,4 @@
 // @ts-check
-/* eslint-disable no-console */
 import  { gsChrome }              from './gsChrome.js';
 import  { gsFavicon }             from './gsFavicon.js';
 import  { gsMessages }            from './gsMessages.js';
@@ -41,12 +40,14 @@ export const gsUtils = {
 
   dir: function(object) {
     if (gsUtils.debugInfo) {
+      // eslint-disable-next-line no-console
       console.dir(object);
     }
   },
   log: function(id, text, ...args) {
     if (gsUtils.debugInfo) {
       args = args || [];
+      // eslint-disable-next-line no-console
       console.log(id, (new Date() + '').split(' ')[4], text, ...args);
     }
   },
@@ -63,6 +64,7 @@ export const gsUtils = {
         .filter(o => !ignores.find(p => o.indexOf(p) >= 0))
         .join('\n');
       args.push(`\n${errorLine}`);
+      // eslint-disable-next-line no-console
       console.warn('WARNING:', id, (new Date() + '').split(' ')[4], text, ...args,);
     }
   },
@@ -82,7 +84,9 @@ export const gsUtils = {
           ? errorObj
           : JSON.stringify(errorObj, null, 2);
       errorObj = errorObj || {};
+      // eslint-disable-next-line no-console
       console.log(id, (new Date() + '').split(' ')[4], 'Error:');
+      // eslint-disable-next-line no-console
       console.error(
         gsUtils.getPrintableError(errorMessage, stackTrace, ...args),
       );
@@ -589,7 +593,6 @@ export const gsUtils = {
 
   htmlEncode: function(text) {
     const pre = document.createElement('pre').appendChild(document.createTextNode(text));
-    gsUtils.highlight('gsUtils', '@TEST htmlEncode', pre.parentElement, pre.parentNode);
     return pre.parentElement?.innerHTML;
   },
 

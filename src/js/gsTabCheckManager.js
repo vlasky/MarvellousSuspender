@@ -142,10 +142,10 @@ export const gsTabCheckManager = (function() {
   async function handleTabCheck(tab, executionProps, resolve, reject, requeue) {
     gsUtils.log(tab.id, QUEUE_ID, 'handleTabCheck', tab.url);
     if (gsUtils.isSuspendedTab(tab)) {
-      checkSuspendedTab(tab, executionProps, resolve, reject, requeue);
+      await checkSuspendedTab(tab, executionProps, resolve, reject, requeue);
     }
     else if (gsUtils.isNormalTab(tab)) {
-      checkNormalTab(tab, executionProps, resolve, reject, requeue);
+      await checkNormalTab(tab, executionProps, resolve, reject, requeue);
     }
     else {
       resolve(gsUtils.STATUS_UNKNOWN);
@@ -268,7 +268,7 @@ export const gsTabCheckManager = (function() {
         gsUtils.log(tab.id, QUEUE_ID, 'Reinitialising suspendedTab: ', tab);
         // If we know that we will discard tab, then just perform a quick init
         const quickInit = attemptDiscarding && !tab.active;
-        chrome.tabs.sendMessage(tab.id, { action: 'initTab', tab, quickInit, sessionId: await gsSession.getSessionId() });
+        await chrome.tabs.sendMessage(tab.id, { action: 'initTab', tab, quickInit, sessionId: await gsSession.getSessionId() });
         reinitialised = true;
       }
       catch (error) {
