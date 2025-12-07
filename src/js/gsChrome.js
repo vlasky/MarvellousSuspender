@@ -1,5 +1,9 @@
 import  { gsUtils }               from './gsUtils.js';
 
+
+const EXTENSION_URL_MATCH = `^(chrome-)?extension://${chrome.runtime.id}/`;
+
+
 export const gsChrome = {
 
   /**
@@ -227,18 +231,56 @@ export const gsChrome = {
     });
   },
 
+
+  /**
+   * @typedef { { tabId: number | undefined } } ContextLike
+   * @param   { number | undefined }  tabId
+   * @returns { Promise<ContextLike | undefined> }
+   */
   contextGetByTabId: async (tabId) => {
+    if (!tabId) return;
     const contexts  = await chrome.runtime.getContexts({ tabIds: [tabId] });
-    gsUtils.highlight('contextGetByTabId contexts', contexts);
-    gsUtils.highlight('contextGetByTabId unfiltered', await chrome.runtime.getContexts({}));
-    return contexts.length === 1 ? contexts[0] : null;
+    gsUtils.highlight('contextGetByTabId contexts', contexts[0]?.tabId, tabId);
+    if (contexts.length === 1) {
+      return contexts[0];
+    }
+
+    // Workaround for Vivaldi bug.  chrome.runtime.getContexts is returning an empty list.
+    // Vivaldi bug reported: VB-122957
+    // https://forum.vivaldi.net/search?in=titlesposts&term=122957&matchWords=any
+    const tab     = await chrome.tabs.get(tabId);
+    gsUtils.highlight('contextGetByTabId fallback tab', tabId, tab.id);
+    if (tab.url?.match(new RegExp(EXTENSION_URL_MATCH, 'i'))) {
+      return { tabId };
+    }
+
   },
+
+  /**
+   * @param   { string }  viewName
+   * @returns { Promise<ContextLike[]> }
+   */
   contextsGetByViewName: async (viewName) => {
-    const contexts  = await chrome.runtime.getContexts({});
+    const contexts    = await chrome.runtime.getContexts({});
     gsUtils.highlight('contextsGetByViewName contexts', contexts);
-    const filtered  = contexts.filter((context) => context.documentUrl?.includes(viewName));
+    const filtered    = contexts.filter((context) => context.documentUrl?.includes(viewName));
     gsUtils.highlight('contextsGetByViewName filtered', filtered);
+    if (filtered.length) {
     return filtered;
+    }
+
+    // Workaround for Vivaldi bug.  chrome.runtime.getContexts is returning an empty list.
+    // Vivaldi bug reported: VB-122957
+    // https://forum.vivaldi.net/search?in=titlesposts&term=122957&matchWords=any
+    if (contexts.length === 1) {
+      const tabs      = await chrome.tabs.query({});
+      const filtered  = tabs.filter((tab) => tab.url?.match(new RegExp(`${EXTENSION_URL_MATCH}/${viewName}`, 'i')));
+      gsUtils.highlight('contextsGetByViewName fallback filtered', filtered);
+      const mapped    = filtered.map((tab) => ({ tabId: tab.id }));
+      gsUtils.highlight('contextsGetByViewName fallback mapped', mapped);
+      return mapped;
+    }
+    return [];
   },
 
 };

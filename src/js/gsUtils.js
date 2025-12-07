@@ -628,12 +628,11 @@ export const gsUtils = {
             continue;
           }
 
-          //if theme or screenshot preferences have changed then refresh suspended tabs
+          // if theme or screenshot preferences have changed then refresh suspended tabs
           const updateTheme = changedSettingKeys.includes(gsStorage.THEME);
           const updatePreviewMode = changedSettingKeys.includes(gsStorage.SCREEN_CAPTURE);
           if (updateTheme || updatePreviewMode) {
-            const context = await gsChrome.contextGetByTabId(tab.id);
-            if (context) {
+            if (await gsChrome.contextGetByTabId(tab.id)) {
               if (updateTheme) {
                 gsStorage.getOption(gsStorage.THEME).then((theme) => {
                   // @TODO favicon will probably fail here if it can't create a DOM Image

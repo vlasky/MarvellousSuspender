@@ -923,10 +923,9 @@ export const tgs = (function() {
       }
     }
     else if (focusedTab.url === chrome.runtime.getURL('options.html')) {
-      const context = await gsChrome.contextGetByTabId(focusedTab.id);
-      gsUtils.highlight('tgs', 'handleNewStationaryTabFocus context', context);
-      if (context) {
-        chrome.tabs.sendMessage(context.tabId, { action: 'initSettings', tab: focusedTab });
+      if (await gsChrome.contextGetByTabId(focusedTab.id)) {
+        // @WARN: this sendMessage is triggering a comms error
+        await chrome.tabs.sendMessage(focusedTab.id, { action: 'initSettings', tab: focusedTab });
       }
       // @TODO: This must be a listener in the options page
       // const optionsView = getInternalViewByTabId(focusedTab.id);
@@ -960,17 +959,15 @@ export const tgs = (function() {
       gsTabCheckManager.queueTabCheck(focusedTab, { refetchTab: false }, 0);
     }
 
-    //check for auto-unsuspend
+    // check for auto-unsuspend
     var autoUnsuspend = await gsStorage.getOption(gsStorage.UNSUSPEND_ON_FOCUS);
     if (autoUnsuspend) {
       if (navigator.onLine) {
         await unsuspendTab(focusedTab);
       }
       else {
-        const context = await gsChrome.contextGetByTabId(focusedTab.id);
-        gsUtils.highlight('tgs', 'handleSuspendedTabFocusGained context', context);
-        if (context) {
-          chrome.tabs.sendMessage(context.tabId, { action: 'showNoConnectivityMessage', tab: focusedTab });
+        if (await gsChrome.contextGetByTabId(focusedTab.id)) {
+          await chrome.tabs.sendMessage(focusedTab.id, { action: 'showNoConnectivityMessage', tab: focusedTab });
         }
       }
     }
