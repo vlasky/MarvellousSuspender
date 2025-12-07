@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsIndexedDb }           from './gsIndexedDb.js';
 import  { gsStorage }             from './gsStorage.js';
@@ -22,7 +23,7 @@ export const gsSession = (function() {
     await new Promise((resolve) => {
       chrome.extension.isAllowedFileSchemeAccess((isAllowedAccess) => {
         fileUrlsAccessAllowed = isAllowedAccess;
-        resolve();
+        resolve(null);
       });
     });
 
@@ -187,7 +188,7 @@ export const gsSession = (function() {
       o => o === gsUtils.STATUS_SUSPENDED || o === gsUtils.STATUS_DISCARDED,
     ).length;
 
-    const startupTabCheckTimeTakenInSeconds = parseInt( (Date.now() - initStartTime) / 1000 );
+    const startupTabCheckTimeTakenInSeconds = Math.floor( (Date.now() - initStartTime) / 1000 );
     gsUtils.log('gsSession',`
 
     ------------------------------------------------
@@ -300,7 +301,9 @@ export const gsSession = (function() {
       const contexts = await gsChrome.contextsGetByViewName('updated');
       if (contexts.length > 0) {
         for (const context of contexts) {
-          chrome.tabs.sendMessage(context.tabId, { action: 'toggleUpdated', tabId: context.tabId });
+          if (context.tabId) {
+            chrome.tabs.sendMessage(context.tabId, { action: 'toggleUpdated', tabId: context.tabId });
+          }
         }
       }
       else {
@@ -327,7 +330,7 @@ export const gsSession = (function() {
           }
           gsTabDiscardManager.queueTabForDiscard(tabs[i]);
         }
-        resolve();
+        resolve(null);
       });
     });
   }
@@ -437,7 +440,7 @@ export const gsSession = (function() {
       await gsChrome.windowsUpdate(lastFocusedWindowId, { focused: true });
     }
 
-    const startupRecoveryTimeTakenInSeconds = parseInt( (Date.now() - recoveryStartTime) / 1000 );
+    const startupRecoveryTimeTakenInSeconds = Math.floor( (Date.now() - recoveryStartTime) / 1000 );
     gsUtils.log('gsSession', `
 
     ------------------------------------------------
@@ -501,7 +504,7 @@ export const gsSession = (function() {
       //remove from tabMatchingObjects
       tabMatchingObjects = tabMatchingObjects.filter(function(o) {
         return (
-          (o.sessionWindow !== bestTabMatchingObject.sessionWindow) &
+          (o.sessionWindow !== bestTabMatchingObject.sessionWindow) &&
           (o.currentWindow !== bestTabMatchingObject.currentWindow)
         );
       });
@@ -629,8 +632,11 @@ export const gsSession = (function() {
     const sessionTabGroupsMap = await gsChrome.tabGroupsMap(sessionTabGroups);
     const groupDelay          = 1000 / tabsToGroupPerSecond;
     for (const pair of allNewTabs) {
-      await gsUtils.setTimeout(groupDelay);
-      await assignTabGroupFromSession(targetWindowId, pair.newTab.id, pair.sessionTab.groupId, currentTabGroupsMap, sessionTabGroupsMap);
+      const newTabId = pair.newTab?.id;
+      if (newTabId) {
+        await gsUtils.setTimeout(groupDelay);
+        await assignTabGroupFromSession(targetWindowId, newTabId, pair.sessionTab.groupId, currentTabGroupsMap, sessionTabGroupsMap);
+      }
     }
 
   }
@@ -640,11 +646,10 @@ export const gsSession = (function() {
    *    delay       : number
    *    windowId    : number
    *    index       : number
-   *    index       : number
-   *    suspendMode : number
    *    sessionTab  : chrome.tabs.Tab
-   * } }
-   * @returns { Promise<{ sessionTab: chrome.tabs.Tab, newTab: chrome.tabs.Tab }> }
+   *    suspendMode : number
+   * } } param
+   * @returns { Promise<{ sessionTab: chrome.tabs.Tab, newTab: chrome.tabs.Tab | null }> }
    */
   async function createNewTabAsPromised({ delay, windowId, index, sessionTab, suspendMode }) {
     return new Promise(async (resolve) => {

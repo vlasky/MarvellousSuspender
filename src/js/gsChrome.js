@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsUtils }               from './gsUtils.js';
 
 
@@ -24,7 +25,7 @@ export const gsChrome = {
       chrome.tabs.create(details, tab => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeTabs', chrome.runtime.lastError);
-          tab = null;
+          resolve(null);
         }
         resolve(tab);
       });
@@ -57,12 +58,17 @@ export const gsChrome = {
       chrome.tabs.update(tabId, updateProperties, tab => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeTabs', chrome.runtime.lastError);
-          tab = null;
+          resolve(null);
         }
         resolve(tab);
       });
     });
   },
+
+  /**
+   * @param   { number | undefined }  tabId
+   * @returns { Promise<chrome.tabs.Tab | null> }
+   */
   tabsGet: function(tabId) {
     return new Promise(resolve => {
       if (!tabId) {
@@ -73,7 +79,7 @@ export const gsChrome = {
       chrome.tabs.get(tabId, tab => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeTabs', chrome.runtime.lastError);
-          tab = null;
+          resolve(null);
         }
         resolve(tab);
       });
@@ -102,7 +108,7 @@ export const gsChrome = {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeTabs', chrome.runtime.lastError);
         }
-        resolve();
+        resolve(null);
       });
     });
   },
@@ -111,7 +117,7 @@ export const gsChrome = {
       chrome.windows.getLastFocused({}, window => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeWindows', chrome.runtime.lastError);
-          window = null;
+          resolve(null);
         }
         resolve(window);
       });
@@ -127,7 +133,7 @@ export const gsChrome = {
       chrome.windows.get(windowId, { populate: true }, window => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeWindows', chrome.runtime.lastError);
-          window = null;
+          resolve(null);
         }
         resolve(window);
       });
@@ -159,14 +165,17 @@ export const gsChrome = {
       });
     });
   },
+
   /**
+   * @typedef { Record<number, chrome.tabGroups.TabGroup> } GroupMap
    * @param   { chrome.tabGroups.TabGroup[] } groups
-   * @returns { Promise<Record<number, chrome.tabGroups.TabGroup>> }
+   * @returns { Promise<GroupMap> }
    */
   tabGroupsMap: async (groups = []) => {
     if (!groups.length) {
       groups        = await gsChrome.tabGroupsGetAll();
     }
+    /** @type GroupMap */
     const groupMap  = {};
     for (const group of groups) {
       groupMap[group.id] = group;
@@ -180,10 +189,11 @@ export const gsChrome = {
   tabGroupsUpdate: (groupId, updateProperties) => {
     return chrome.tabGroups.update(groupId, updateProperties);
   },
+
   /**
-   * @param   { number[] }            tabIds
-   * @param   { number }              windowId
-   * @param   { number | undefined }  groupId
+   * @param   { number | [number, ...number[]] }  tabIds
+   * @param   { number }                          windowId
+   * @param   { number | undefined }              [groupId]
    * @returns { Promise<number> }
    */
   tabsGroup: (tabIds, windowId, groupId) => {
@@ -208,7 +218,7 @@ export const gsChrome = {
       chrome.windows.create(createData, window => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeWindows', chrome.runtime.lastError);
-          window = null;
+          resolve(null);
         }
         resolve(window);
       });
@@ -224,7 +234,7 @@ export const gsChrome = {
       chrome.windows.update(windowId, updateInfo, window => {
         if (chrome.runtime.lastError) {
           gsUtils.warning('chromeWindows', chrome.runtime.lastError);
-          window = null;
+          resolve(null);
         }
         resolve(window);
       });
@@ -266,7 +276,7 @@ export const gsChrome = {
     const filtered    = contexts.filter((context) => context.documentUrl?.includes(viewName));
     gsUtils.highlight('contextsGetByViewName filtered', filtered);
     if (filtered.length) {
-    return filtered;
+      return filtered;
     }
 
     // Workaround for Vivaldi bug.  chrome.runtime.getContexts is returning an empty list.

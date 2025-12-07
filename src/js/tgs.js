@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsMessages }            from './gsMessages.js';
 import  { gsSession }             from './gsSession.js';
@@ -294,8 +295,8 @@ export const tgs = (function() {
         gsUtils.warning( 'background', 'Could not determine currently active window.' );
         return;
       }
-      chrome.windows.get(activeTab.windowId, { populate: true }, curWindow => {
-        for (const tab of curWindow.tabs) {
+      chrome.windows.get(activeTab.windowId, { populate: true }, (curWindow) => {
+        for (const tab of curWindow.tabs ?? []) {
           if (!tab.active) {
             gsTabSuspendManager.queueTabForSuspension(tab, forceLevel);
           }
@@ -320,7 +321,7 @@ export const tgs = (function() {
         return;
       }
       chrome.windows.get(activeTab.windowId, { populate: true }, async (curWindow) => {
-        for (const tab of curWindow.tabs) {
+        for (const tab of curWindow.tabs ?? []) {
           gsTabSuspendManager.unqueueTabForSuspension(tab);
           if (gsUtils.isSuspendedTab(tab)) {
             await unsuspendTab(tab);
@@ -636,8 +637,8 @@ export const tgs = (function() {
       if (previousVisit) {
         chrome.history.deleteRange(
           {
-            startTime: previousVisit.visitTime - 0.1,
-            endTime: previousVisit.visitTime + 0.1,
+            startTime : (previousVisit.visitTime ?? 0) - 0.1,
+            endTime   : (previousVisit.visitTime ?? 0) + 0.1,
           },
           () => {},
         );
@@ -816,7 +817,9 @@ export const tgs = (function() {
         await gsStorage.saveStorage('session', 'gsSuspensionToggleHotkey', newHotkey);
         const contexts = await gsChrome.contextsGetByViewName('suspended');
         for (const context of contexts) {
-          chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
+          if (context.tabId) {
+            chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
+          }
         }
       }
       await gsStorage.saveStorage('session', 'gsTriggerHotkeyUpdate', false);
@@ -838,7 +841,6 @@ export const tgs = (function() {
     const status = await new Promise(resolve => {
       calculateTabStatus(focusedTab, contentScriptStatus, resolve);
     });
-    // gsUtils.log(focusedTab.id, 'tgs', 'calculateTabStatus', status);
 
     //if this tab still has focus then update icon
     if ((await getCurrentFocusedTabIdByWindowId())[windowId] === focusedTab.id) {
@@ -883,7 +885,7 @@ export const tgs = (function() {
       const previousStationaryWindowId = await gsStorage.getStorageJSON('session', 'gsCurrentStationaryWindowId');
       await setCurrentStationaryWindowId(windowId);
       var previousStationaryTabId = (await getCurrentStationaryTabIdByWindowId())[previousStationaryWindowId];
-      handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
+      await handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
     }, focusDelay);
   }
 
@@ -894,15 +896,15 @@ export const tgs = (function() {
       const previousStationaryTabId = statTabByWindow[windowId];
       statTabByWindow[windowId] = focusedTab.id;
       await gsStorage.saveStorage('session', 'gsCurrentStationaryTabIdByWindowId', statTabByWindow);
-      handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
-    }, focusDelay);
+      await handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
+    }, focusDelay);   // @WARN: This line is reporting a comms error, from sendMessage below
   }
 
-  function handleNewStationaryTabFocus( focusedTabId, previousStationaryTabId, focusedTab, ) {
+  async function handleNewStationaryTabFocus( focusedTabId, previousStationaryTabId, focusedTab, ) {
     gsUtils.log(focusedTabId, 'tgs', 'handleNewStationaryTabFocus');
 
     if (gsUtils.isSuspendedTab(focusedTab)) {
-      handleSuspendedTabFocusGained(focusedTab); //async. unhandled promise.
+      await handleSuspendedTabFocusGained(focusedTab);
     }
     else if (gsUtils.isNormalTab(focusedTab)) {
       const queuedTabDetails = gsTabSuspendManager.getQueuedTabDetails( focusedTab, );
@@ -1210,6 +1212,7 @@ export const tgs = (function() {
 
   //HANDLERS FOR RIGHT-CLICK CONTEXT MENU
   function buildContextMenu(showContextMenu) {
+    /** @type { chrome.contextMenus.CreateProperties['contexts'] } */
     const allContexts = [ 'page', 'frame', 'editable', 'image', 'video', 'audio' ]; //'selection',
 
     if (!showContextMenu) {

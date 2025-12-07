@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsSession }             from './gsSession.js';
 import  { gsStorage }             from './gsStorage.js';
@@ -22,7 +23,7 @@ import  { tgs }                   from './tgs.js';
 
     Promise.resolve()
       .then(gsStorage.initSettingsAsPromised)   // ensure settings have been loaded and synced
-      .then(gsStorage.saveStorage('session', 'gsInitialisationMode', true))
+      .then(async () => { await gsStorage.saveStorage('session', 'gsInitialisationMode', true); })
       .then(gsSession.runStartupChecks)         // performs crash check (and maybe recovery) and tab responsiveness checks
       .catch(error => {
         gsUtils.error('background startup checks error: ', error);
@@ -53,17 +54,15 @@ import  { tgs }                   from './tgs.js';
       await gsStorage.setOptionAndSync(gsStorage.UPDATE_AVAILABLE, false);
     }
 
-    // gsUtils.debugInfo   = true;
-    // gsUtils.debugError  = true;
     // if (gsUtils.debugInfo) {
     //   // await gsStorage.setOptionAndSync(gsStorage.UPDATE_AVAILABLE, true);
     //   // chrome.storage.local.set({'gsVersion': '"8.0.0"'});
-    //   chrome.storage.local.remove([gsStorage.LAST_EXTENSION_RECOVERY]);
-    //   setTimeout(() => {
+    //   await chrome.storage.local.remove([gsStorage.LAST_EXTENSION_RECOVERY]);
+    //   setTimeout(async () => {
     //     // chrome.tabs.create({ url: `${getSuspendURL()}#ttl=Google+1&uri=https://www.google.com` });
     //     // chrome.tabs.create({ url: `${getSuspendURL()}#ttl=GitHub+3&uri=https://www.github.com` });
     //     // chrome.tabs.create({ url: chrome.runtime.getURL('debug.html') });
-    //     // chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+    //     await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
     //   }, 200);
     //   // setTimeout(() => {
     //   //   gsSession.prepareForUpdate({ version: 'new version'});
@@ -130,21 +129,21 @@ import  { tgs }                   from './tgs.js';
           contentScriptStatus === 'formInput' ||
           contentScriptStatus === 'tempWhitelist'
         ) {
-          chrome.tabs.update(sender.tab.id, { autoDiscardable: false });
+          await chrome.tabs.update(sender.tab.id, { autoDiscardable: false });
         }
         else if (!sender.tab.autoDiscardable) {
-          chrome.tabs.update(sender.tab.id, { autoDiscardable: true });
+          await chrome.tabs.update(sender.tab.id, { autoDiscardable: true });
         }
         // If tab is currently visible then update popup icon
         if (sender.tab && await tgs.isCurrentFocusedTab(sender.tab)) {
-          tgs.calculateTabStatus(sender.tab, contentScriptStatus, function(status) {
+          await tgs.calculateTabStatus(sender.tab, contentScriptStatus, function(status) {
             tgs.setIconStatus(status, sender.tab.id);
           });
         }
         break;
       }
       case 'savePreviewData' : {
-        gsTabSuspendManager.handlePreviewImageResponse(sender.tab, request.previewUrl, request.errorMsg); // async. unhandled promise
+        await gsTabSuspendManager.handlePreviewImageResponse(sender.tab, request.previewUrl, request.errorMsg); // async. unhandled promise
         break;
       }
 
@@ -181,11 +180,11 @@ import  { tgs }                   from './tgs.js';
         break;
       }
       case 'sessionManagerLink': {
-        chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('history.html') });
         break;
       }
       case 'settingsLink' : {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
         break;
       }
       default: {
@@ -197,6 +196,7 @@ import  { tgs }                   from './tgs.js';
     return false;
   }
 
+  gsUtils.highlight('background', 'externalMessageRequestListener', '@TEST this will need to be async eventually');
   function externalMessageRequestListener(request, sender, sendResponse) {
     gsUtils.log('background', 'externalMessageRequestListener', request, sender);
 
@@ -255,6 +255,7 @@ import  { tgs }                   from './tgs.js';
 
 
   // Listeners must part of the top-level evaluation of the service worker
+  gsUtils.highlight('background', 'contextMenuListener', '@TEST this will need to be async eventually');
   function contextMenuListener(info, tab) {
     switch (info.menuItemId) {
       case 'open_link_in_suspended_tab':
@@ -305,6 +306,7 @@ import  { tgs }                   from './tgs.js';
   }
 
   // Listeners must part of the top-level evaluation of the service worker
+  gsUtils.highlight('background', 'commandListener', '@TEST this will need to be async eventually');
   function commandListener(command) {
     switch (command) {
       case '1-suspend-tab':
@@ -416,7 +418,7 @@ import  { tgs }                   from './tgs.js';
       if (!changeInfo) return;
 
       if (await gsStorage.getOption(gsStorage.CLAIM_BY_DEFAULT) && changeInfo.status === 'complete') {
-        claimTab(tabId);
+        await claimTab(tabId);
       }
 
       // if url has changed
@@ -438,7 +440,7 @@ import  { tgs }                   from './tgs.js';
 
       var noticeToDisplay = await tgs.requestNotice();
       if (noticeToDisplay) {
-        chrome.tabs.create({ url: chrome.runtime.getURL('notice.html') });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('notice.html') });
       }
     });
     chrome.windows.onRemoved.addListener(function(windowId) {
@@ -450,7 +452,8 @@ import  { tgs }                   from './tgs.js';
   // Listeners must part of the top-level evaluation of the service worker
   function addMiscListeners() {
     //add listener for battery state changes
-    if (navigator.getBattery) {
+    if ('getBattery' in navigator && typeof navigator.getBattery === 'function') {
+      gsUtils.highlight('background', 'addMiscListeners', '@TEST typeof getBattery', typeof navigator.getBattery);
       navigator.getBattery().then(async (battery) => {
         await tgs.setCharging(battery.charging);
 
@@ -487,6 +490,7 @@ import  { tgs }                   from './tgs.js';
 
   }
 
+  /** @returns { Promise<void> } */
   function initAsPromised() {
     return new Promise(async (resolve) => {
       gsUtils.log('background', 'PERFORMING BACKGROUND INIT...');

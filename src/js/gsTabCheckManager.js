@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsMessages }            from './gsMessages.js';
 import  { gsSession }             from './gsSession.js';
@@ -37,7 +38,7 @@ export const gsTabCheckManager = (function() {
       };
       _tabCheckQueue = gsTabQueue.init(QUEUE_ID, queueProps);
       gsUtils.log(QUEUE_ID, 'init successful');
-      resolve();
+      resolve(null);
     });
   }
 

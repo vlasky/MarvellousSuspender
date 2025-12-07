@@ -1,3 +1,4 @@
+// @ts-check
 /* eslint-disable no-console */
 import  { gsChrome }              from './gsChrome.js';
 import  { gsFavicon }             from './gsFavicon.js';
@@ -101,8 +102,10 @@ export const gsUtils = {
   },
   getStackTrace: function() {
     var obj = {};
-    Error.captureStackTrace(obj, gsUtils.getStackTrace);
-    return obj.stack;
+    if ('captureStackTrace' in Error && typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(obj, gsUtils.getStackTrace);
+      return obj.stack;
+    }
   },
 
   isDebugInfo: function() {
@@ -242,7 +245,7 @@ export const gsUtils = {
     return new Promise(async resolve => {
       const tabs = await gsChrome.tabsQuery({ url });
       chrome.tabs.remove(tabs.map(o => o.id), () => {
-        resolve();
+        resolve(null);
       });
     });
   },
@@ -250,14 +253,13 @@ export const gsUtils = {
   createTabAndWaitForFinishLoading: function(url, maxWaitTimeInMs) {
     return new Promise(async resolve => {
       let tab = await gsChrome.tabsCreate(url);
-      maxWaitTimeInMs = maxWaitTimeInMs || 1000;
-      const retryUntil = Date.now() + maxWaitTimeInMs;
+      const retryUntil = Date.now() + (maxWaitTimeInMs || 1000);
       let loaded = false;
-      while (!loaded && Date.now() < retryUntil) {
-        tab = await gsChrome.tabsGet(tab.id);
+      while (tab && !loaded && Date.now() < retryUntil) {
         loaded = tab.status === 'complete';
         if (!loaded) {
           await gsUtils.setTimeout(200);
+          tab = await gsChrome.tabsGet(tab.id);
         }
       }
       resolve(tab);
@@ -377,10 +379,10 @@ export const gsUtils = {
   documentReadyAsPromised: function(doc) {
     return new Promise(function(resolve) {
       if (doc.readyState !== 'loading') {
-        resolve();
+        resolve(null);
       } else {
         doc.addEventListener('DOMContentLoaded', function() {
-          resolve();
+          resolve(null);
         });
       }
     });
@@ -586,9 +588,9 @@ export const gsUtils = {
   },
 
   htmlEncode: function(text) {
-    return document
-      .createElement('pre')
-      .appendChild(document.createTextNode(text)).parentNode.innerHTML;
+    const pre = document.createElement('pre').appendChild(document.createTextNode(text));
+    gsUtils.highlight('gsUtils', '@TEST htmlEncode', pre.parentElement, pre.parentNode);
+    return pre.parentElement?.innerHTML;
   },
 
   getChromeVersion: function() {
@@ -638,13 +640,17 @@ export const gsUtils = {
                   // @TODO favicon will probably fail here if it can't create a DOM Image
                   gsFavicon.getFaviconMeta(tab).then(faviconMeta => {
                     const isLowContrastFavicon = faviconMeta.isDark || false;
-                    chrome.tabs.sendMessage(tab.id, { action: 'updateTheme', tab, theme, isLowContrastFavicon });
+                    if (tab.id) {
+                      chrome.tabs.sendMessage(tab.id, { action: 'updateTheme', tab, theme, isLowContrastFavicon });
+                    }
                   });
                 });
               }
               if (updatePreviewMode) {
                 gsStorage.getOption(gsStorage.SCREEN_CAPTURE).then((previewMode) => {
-                  chrome.tabs.sendMessage(tab.id, { action: 'updatePreviewMode', tab, previewMode });
+                  if (tab.id) {
+                    chrome.tabs.sendMessage(tab.id, { action: 'updatePreviewMode', tab, previewMode });
+                  }
                 });
               }
             }
@@ -707,7 +713,7 @@ export const gsUtils = {
         //should always be caught by tests above, but we'll check all tabs anyway just in case
         // if (!updateSuspendTime) {
         //     gsMessages.sendRequestInfoToContentScript(tab.id, function (err, tabInfo) { // unhandled error
-        //         tgs.calculateTabStatus(tab, tabInfo, function (tabStatus) {
+        //         await tgs.calculateTabStatus(tab, tabInfo, function (tabStatus) {
         //             if (tabStatus === STATUS_NORMAL && tabInfo && tabInfo.timerUp && (new Date(tabInfo.timerUp)) < new Date()) {
         //                 gsUtils.error(tab.id, 'Tab has an expired timer!', tabInfo);
         //                 gsMessages.sendUpdateToContentScriptOfTab(tab, true, false); // async. unhandled error
@@ -795,7 +801,7 @@ export const gsUtils = {
 
   debounce: function(func, wait) {
     var timeout;
-    return function() {
+    return () => {
       var context = this,
         args = arguments;
       var later = function() {
