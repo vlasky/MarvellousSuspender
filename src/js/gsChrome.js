@@ -249,6 +249,7 @@ export const gsChrome = {
    */
   contextGetByTabId: async (tabId) => {
     if (!tabId) return;
+    // NOTE: getContexts probably isn't really needed, since the workaround should be quick enough
     const contexts  = await chrome.runtime.getContexts({ tabIds: [tabId] });
     gsUtils.log('contextGetByTabId', contexts[0]?.tabId, tabId);
     if (contexts.length === 1) {
@@ -271,6 +272,7 @@ export const gsChrome = {
    * @returns { Promise<ContextLike[]> }
    */
   contextsGetByViewName: async (viewName) => {
+    // NOTE: getContexts might be significantly faster than the workaround for users with lots of tabs.  We'll have to test before removing entirely.
     const contexts    = await chrome.runtime.getContexts({});
     const filtered    = contexts.filter((context) => context.documentUrl?.includes(viewName));
     gsUtils.log('contextsGetByViewName', filtered);
