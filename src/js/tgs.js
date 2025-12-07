@@ -590,7 +590,7 @@ export const tgs = (function() {
         await deleteTabStateForTabId(tab.id);
 
         if (historyUrlToRemove) {
-          removeTabHistoryForUnuspendedTab(historyUrlToRemove);
+          removeTabHistoryForUnsuspendedTab(historyUrlToRemove);
         }
         if (setAutodiscardable) {
           await gsChrome.tabsUpdate(tab.id, { autoDiscardable: true });
@@ -625,7 +625,7 @@ export const tgs = (function() {
     }
   }
 
-  function removeTabHistoryForUnuspendedTab(suspendedUrl) {
+  function removeTabHistoryForUnsuspendedTab(suspendedUrl) {
     chrome.history.deleteUrl({ url: suspendedUrl });
     const originalUrl = gsUtils.getOriginalUrl(suspendedUrl);
     chrome.history.getVisits({ url: originalUrl }, visits => {
@@ -1133,6 +1133,7 @@ export const tgs = (function() {
       callback(gsUtils.STATUS_NEVER);
       return;
     }
+
     getContentScriptStatus(tab.id, knownContentScriptStatus).then(
       async (contentScriptStatus) => {
         if ( contentScriptStatus && contentScriptStatus !== gsUtils.STATUS_NORMAL ) {
