@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsFavicon }             from './gsFavicon.js';
 import  { gsMessages }            from './gsMessages.js';
@@ -40,12 +40,14 @@ export const gsUtils = {
 
   dir: function(object) {
     if (gsUtils.debugInfo) {
+      // eslint-disable-next-line no-console
       console.dir(object);
     }
   },
   log: function(id, text, ...args) {
     if (gsUtils.debugInfo) {
       args = args || [];
+      // eslint-disable-next-line no-console
       console.log(id, (new Date() + '').split(' ')[4], text, ...args);
     }
   },
@@ -62,6 +64,7 @@ export const gsUtils = {
         .filter(o => !ignores.find(p => o.indexOf(p) >= 0))
         .join('\n');
       args.push(`\n${errorLine}`);
+      // eslint-disable-next-line no-console
       console.warn('WARNING:', id, (new Date() + '').split(' ')[4], text, ...args,);
     }
   },
@@ -81,7 +84,9 @@ export const gsUtils = {
           ? errorObj
           : JSON.stringify(errorObj, null, 2);
       errorObj = errorObj || {};
+      // eslint-disable-next-line no-console
       console.log(id, (new Date() + '').split(' ')[4], 'Error:');
+      // eslint-disable-next-line no-console
       console.error(
         gsUtils.getPrintableError(errorMessage, stackTrace, ...args),
       );
@@ -101,8 +106,10 @@ export const gsUtils = {
   },
   getStackTrace: function() {
     var obj = {};
-    Error.captureStackTrace(obj, gsUtils.getStackTrace);
-    return obj.stack;
+    if ('captureStackTrace' in Error && typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(obj, gsUtils.getStackTrace);
+      return obj.stack;
+    }
   },
 
   isDebugInfo: function() {
@@ -154,8 +161,6 @@ export const gsUtils = {
     if (
       url.indexOf('about') === 0 ||
       url.indexOf('chrome') === 0 ||
-      // webstore urls no longer seem to crash the extension :D
-      // url.indexOf('chrome.google.com/webstore') >= 0 ||
       gsUtils.isBlockedFileTab(tab)
     ) {
       return true;
@@ -244,7 +249,7 @@ export const gsUtils = {
     return new Promise(async resolve => {
       const tabs = await gsChrome.tabsQuery({ url });
       chrome.tabs.remove(tabs.map(o => o.id), () => {
-        resolve();
+        resolve(null);
       });
     });
   },
@@ -252,14 +257,13 @@ export const gsUtils = {
   createTabAndWaitForFinishLoading: function(url, maxWaitTimeInMs) {
     return new Promise(async resolve => {
       let tab = await gsChrome.tabsCreate(url);
-      maxWaitTimeInMs = maxWaitTimeInMs || 1000;
-      const retryUntil = Date.now() + maxWaitTimeInMs;
+      const retryUntil = Date.now() + (maxWaitTimeInMs || 1000);
       let loaded = false;
-      while (!loaded && Date.now() < retryUntil) {
-        tab = await gsChrome.tabsGet(tab.id);
+      while (tab && !loaded && Date.now() < retryUntil) {
         loaded = tab.status === 'complete';
         if (!loaded) {
           await gsUtils.setTimeout(200);
+          tab = await gsChrome.tabsGet(tab.id);
         }
       }
       resolve(tab);
@@ -379,10 +383,10 @@ export const gsUtils = {
   documentReadyAsPromised: function(doc) {
     return new Promise(function(resolve) {
       if (doc.readyState !== 'loading') {
-        resolve();
+        resolve(null);
       } else {
         doc.addEventListener('DOMContentLoaded', function() {
-          resolve();
+          resolve(null);
         });
       }
     });
@@ -588,9 +592,8 @@ export const gsUtils = {
   },
 
   htmlEncode: function(text) {
-    return document
-      .createElement('pre')
-      .appendChild(document.createTextNode(text)).parentNode.innerHTML;
+    const pre = document.createElement('pre').appendChild(document.createTextNode(text));
+    return pre.parentElement?.innerHTML;
   },
 
   getChromeVersion: function() {
@@ -630,24 +633,27 @@ export const gsUtils = {
             continue;
           }
 
-          //if theme or screenshot preferences have changed then refresh suspended tabs
+          // if theme or screenshot preferences have changed then refresh suspended tabs
           const updateTheme = changedSettingKeys.includes(gsStorage.THEME);
           const updatePreviewMode = changedSettingKeys.includes(gsStorage.SCREEN_CAPTURE);
           if (updateTheme || updatePreviewMode) {
-            const context = await tgs.getInternalContextByTabId(tab.id);
-            if (context) {
+            if (await gsChrome.contextGetByTabId(tab.id)) {
               if (updateTheme) {
                 gsStorage.getOption(gsStorage.THEME).then((theme) => {
                   // @TODO favicon will probably fail here if it can't create a DOM Image
                   gsFavicon.getFaviconMeta(tab).then(faviconMeta => {
                     const isLowContrastFavicon = faviconMeta.isDark || false;
-                    chrome.tabs.sendMessage(tab.id, { action: 'updateTheme', tab, theme, isLowContrastFavicon });
+                    if (tab.id) {
+                      chrome.tabs.sendMessage(tab.id, { action: 'updateTheme', tab, theme, isLowContrastFavicon });
+                    }
                   });
                 });
               }
               if (updatePreviewMode) {
                 gsStorage.getOption(gsStorage.SCREEN_CAPTURE).then((previewMode) => {
-                  chrome.tabs.sendMessage(tab.id, { action: 'updatePreviewMode', tab, previewMode });
+                  if (tab.id) {
+                    chrome.tabs.sendMessage(tab.id, { action: 'updatePreviewMode', tab, previewMode });
+                  }
                 });
               }
             }
@@ -710,7 +716,7 @@ export const gsUtils = {
         //should always be caught by tests above, but we'll check all tabs anyway just in case
         // if (!updateSuspendTime) {
         //     gsMessages.sendRequestInfoToContentScript(tab.id, function (err, tabInfo) { // unhandled error
-        //         tgs.calculateTabStatus(tab, tabInfo, function (tabStatus) {
+        //         await tgs.calculateTabStatus(tab, tabInfo, function (tabStatus) {
         //             if (tabStatus === STATUS_NORMAL && tabInfo && tabInfo.timerUp && (new Date(tabInfo.timerUp)) < new Date()) {
         //                 gsUtils.error(tab.id, 'Tab has an expired timer!', tabInfo);
         //                 gsMessages.sendUpdateToContentScriptOfTab(tab, true, false); // async. unhandled error
@@ -798,7 +804,7 @@ export const gsUtils = {
 
   debounce: function(func, wait) {
     var timeout;
-    return function() {
+    return () => {
       var context = this,
         args = arguments;
       var later = function() {

@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsMessages }            from './gsMessages.js';
 import  { gsSession }             from './gsSession.js';
@@ -37,7 +38,7 @@ export const gsTabCheckManager = (function() {
       };
       _tabCheckQueue = gsTabQueue.init(QUEUE_ID, queueProps);
       gsUtils.log(QUEUE_ID, 'init successful');
-      resolve();
+      resolve(null);
     });
   }
 
@@ -141,10 +142,10 @@ export const gsTabCheckManager = (function() {
   async function handleTabCheck(tab, executionProps, resolve, reject, requeue) {
     gsUtils.log(tab.id, QUEUE_ID, 'handleTabCheck', tab.url);
     if (gsUtils.isSuspendedTab(tab)) {
-      checkSuspendedTab(tab, executionProps, resolve, reject, requeue);
+      await checkSuspendedTab(tab, executionProps, resolve, reject, requeue);
     }
     else if (gsUtils.isNormalTab(tab)) {
-      checkNormalTab(tab, executionProps, resolve, reject, requeue);
+      await checkNormalTab(tab, executionProps, resolve, reject, requeue);
     }
     else {
       resolve(gsUtils.STATUS_UNKNOWN);
@@ -217,8 +218,7 @@ export const gsTabCheckManager = (function() {
     }
 
     // Make sure tab is registered as a 'view' of the extension
-    const context = await tgs.getInternalContextByTabId(tab.id);
-    if (!context) {
+    if (!(await gsChrome.contextGetByTabId(tab.id))) {
       gsUtils.log( tab.id, QUEUE_ID, 'Could not find an internal view for suspended tab.', tab );
       if (!executionProps.resuspended) {
         const resuspendOk = await resuspendSuspendedTab(tab);
@@ -268,7 +268,7 @@ export const gsTabCheckManager = (function() {
         gsUtils.log(tab.id, QUEUE_ID, 'Reinitialising suspendedTab: ', tab);
         // If we know that we will discard tab, then just perform a quick init
         const quickInit = attemptDiscarding && !tab.active;
-        chrome.tabs.sendMessage(tab.id, { action: 'initTab', tab, quickInit, sessionId: await gsSession.getSessionId() });
+        await chrome.tabs.sendMessage(tab.id, { action: 'initTab', tab, quickInit, sessionId: await gsSession.getSessionId() });
         reinitialised = true;
       }
       catch (error) {
@@ -294,8 +294,7 @@ export const gsTabCheckManager = (function() {
 
   async function resuspendSuspendedTab(tab) {
     gsUtils.log(tab.id, QUEUE_ID, 'Resuspending unresponsive suspended tab.');
-    const context = await tgs.getInternalContextByTabId(tab.id);
-    if (context) {
+    if (await gsChrome.contextGetByTabId(tab.id)) {
       await tgs.setTabStatePropForTabId( tab.id, tgs.STATE_DISABLE_UNSUSPEND_ON_RELOAD, true );
     }
     const reloadOk = await gsChrome.tabsReload(tab.id);

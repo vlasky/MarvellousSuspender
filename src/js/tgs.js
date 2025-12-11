@@ -1,3 +1,4 @@
+// @ts-check
 import  { gsChrome }              from './gsChrome.js';
 import  { gsMessages }            from './gsMessages.js';
 import  { gsSession }             from './gsSession.js';
@@ -35,17 +36,6 @@ export const tgs = (function() {
   let _sessionSaveTimer;
   let _newTabFocusTimer;
   let _newWindowFocusTimer;
-
-
-  async function getInternalContextByTabId(tabId) {
-    const contexts = await chrome.runtime.getContexts({ tabIds: [tabId] });
-    return contexts.length === 1 ? contexts[0] : null;
-  }
-
-  async function getInternalContextsByViewName(viewName, callback) {
-    const contexts = await chrome.runtime.getContexts({});
-    return contexts.filter((context) => context.documentUrl?.includes(viewName));
-  }
 
 
   function getCurrentlyActiveTab(callback) {
@@ -305,8 +295,8 @@ export const tgs = (function() {
         gsUtils.warning( 'background', 'Could not determine currently active window.' );
         return;
       }
-      chrome.windows.get(activeTab.windowId, { populate: true }, curWindow => {
-        for (const tab of curWindow.tabs) {
+      chrome.windows.get(activeTab.windowId, { populate: true }, (curWindow) => {
+        for (const tab of curWindow.tabs ?? []) {
           if (!tab.active) {
             gsTabSuspendManager.queueTabForSuspension(tab, forceLevel);
           }
@@ -331,7 +321,7 @@ export const tgs = (function() {
         return;
       }
       chrome.windows.get(activeTab.windowId, { populate: true }, async (curWindow) => {
-        for (const tab of curWindow.tabs) {
+        for (const tab of curWindow.tabs ?? []) {
           gsTabSuspendManager.unqueueTabForSuspension(tab);
           if (gsUtils.isSuspendedTab(tab)) {
             await unsuspendTab(tab);
@@ -493,7 +483,7 @@ export const tgs = (function() {
       // chrome.tabs.update if this is set to true. This gets unset again after tab
       // has reloaded via the STATE_SET_AUTODISCARDABLE flag.
       gsUtils.log(tab.id, 'Unsuspending tab via chrome.tabs.update');
-      chrome.tabs.update(tab.id, { url: originalUrl, autoDiscardable: false });
+      await chrome.tabs.update(tab.id, { url: originalUrl, autoDiscardable: false });
       return;
     }
 
@@ -554,7 +544,7 @@ export const tgs = (function() {
         return;
       }
       gsUtils.log( tab.id, 'Unsuspended tab has been discarded, Url', tab.url );
-      gsTabDiscardManager.handleDiscardedUnsuspendedTab(tab); //async. unhandled promise.
+      await gsTabDiscardManager.handleDiscardedUnsuspendedTab(tab); //async. unhandled promise.
 
       // When a tab is discarded the tab id changes. We need up-to-date UNSUSPENDED
       // tabIds in the current session otherwise crash recovery will not work
@@ -600,10 +590,10 @@ export const tgs = (function() {
         await deleteTabStateForTabId(tab.id);
 
         if (historyUrlToRemove) {
-          removeTabHistoryForUnuspendedTab(historyUrlToRemove);
+          removeTabHistoryForUnsuspendedTab(historyUrlToRemove);
         }
         if (setAutodiscardable) {
-          gsChrome.tabsUpdate(tab.id, { autoDiscardable: true });
+          await gsChrome.tabsUpdate(tab.id, { autoDiscardable: true });
         }
 
         //init loaded tab
@@ -635,7 +625,7 @@ export const tgs = (function() {
     }
   }
 
-  function removeTabHistoryForUnuspendedTab(suspendedUrl) {
+  function removeTabHistoryForUnsuspendedTab(suspendedUrl) {
     chrome.history.deleteUrl({ url: suspendedUrl });
     const originalUrl = gsUtils.getOriginalUrl(suspendedUrl);
     chrome.history.getVisits({ url: originalUrl }, visits => {
@@ -647,8 +637,8 @@ export const tgs = (function() {
       if (previousVisit) {
         chrome.history.deleteRange(
           {
-            startTime: previousVisit.visitTime - 0.1,
-            endTime: previousVisit.visitTime + 0.1,
+            startTime : (previousVisit.visitTime ?? 0) - 0.1,
+            endTime   : (previousVisit.visitTime ?? 0) + 0.1,
           },
           () => {},
         );
@@ -755,7 +745,7 @@ export const tgs = (function() {
     }
     await gsStorage.saveStorage('session', 'gsCurrentStationaryTabIdByWindowId', statTabByWindow);
 
-    deleteTabStateForTabId(tabId);
+    await deleteTabStateForTabId(tabId);
   }
 
   async function getSuspensionToggleHotkey() {
@@ -786,7 +776,7 @@ export const tgs = (function() {
         }
       }
       if (!focusedTab) {
-        gsUtils.warning( 'background', `Couldnt find active tab with windowId: ${windowId}. Window may have been closed.` );
+        gsUtils.warning( 'background', `Could not find active tab with windowId: ${windowId}. Window may have been closed.` );
         return;
       }
 
@@ -825,9 +815,11 @@ export const tgs = (function() {
       const newHotkey = await buildSuspensionToggleHotkey();
       if (oldHotkey !== newHotkey) {
         await gsStorage.saveStorage('session', 'gsSuspensionToggleHotkey', newHotkey);
-        const contexts = await getInternalContextsByViewName('suspended');
+        const contexts = await gsChrome.contextsGetByViewName('suspended');
         for (const context of contexts) {
-          chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
+          if (context.tabId) {
+            await chrome.tabs.sendMessage(context.tabId, { action: 'updateCommand', tabId: context.tabId });
+          }
         }
       }
       await gsStorage.saveStorage('session', 'gsTriggerHotkeyUpdate', false);
@@ -846,10 +838,9 @@ export const tgs = (function() {
     }
 
     //update icon
-    const status = await new Promise(resolve => {
-      calculateTabStatus(focusedTab, contentScriptStatus, resolve);
+    const status = await new Promise(async (resolve) => {
+      await calculateTabStatus(focusedTab, contentScriptStatus, resolve);
     });
-    // gsUtils.log(focusedTab.id, 'tgs', 'calculateTabStatus', status);
 
     //if this tab still has focus then update icon
     if ((await getCurrentFocusedTabIdByWindowId())[windowId] === focusedTab.id) {
@@ -894,7 +885,7 @@ export const tgs = (function() {
       const previousStationaryWindowId = await gsStorage.getStorageJSON('session', 'gsCurrentStationaryWindowId');
       await setCurrentStationaryWindowId(windowId);
       var previousStationaryTabId = (await getCurrentStationaryTabIdByWindowId())[previousStationaryWindowId];
-      handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
+      await handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
     }, focusDelay);
   }
 
@@ -905,15 +896,15 @@ export const tgs = (function() {
       const previousStationaryTabId = statTabByWindow[windowId];
       statTabByWindow[windowId] = focusedTab.id;
       await gsStorage.saveStorage('session', 'gsCurrentStationaryTabIdByWindowId', statTabByWindow);
-      handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
-    }, focusDelay);
+      await handleNewStationaryTabFocus(tabId, previousStationaryTabId, focusedTab);
+    }, focusDelay);   // @WARN: This line is reporting a comms error, from sendMessage below
   }
 
-  function handleNewStationaryTabFocus( focusedTabId, previousStationaryTabId, focusedTab, ) {
+  async function handleNewStationaryTabFocus( focusedTabId, previousStationaryTabId, focusedTab, ) {
     gsUtils.log(focusedTabId, 'tgs', 'handleNewStationaryTabFocus');
 
     if (gsUtils.isSuspendedTab(focusedTab)) {
-      handleSuspendedTabFocusGained(focusedTab); //async. unhandled promise.
+      await handleSuspendedTabFocusGained(focusedTab);
     }
     else if (gsUtils.isNormalTab(focusedTab)) {
       const queuedTabDetails = gsTabSuspendManager.getQueuedTabDetails( focusedTab, );
@@ -934,9 +925,10 @@ export const tgs = (function() {
       }
     }
     else if (focusedTab.url === chrome.runtime.getURL('options.html')) {
-      getInternalContextByTabId(focusedTab.id, (context) => {
-        chrome.tabs.sendMessage(context.tabId, { action: 'initSettings', tab: focusedTab });
-      });
+      if (await gsChrome.contextGetByTabId(focusedTab.id)) {
+        // @WARN: this sendMessage is triggering a comms error
+        await chrome.tabs.sendMessage(focusedTab.id, { action: 'initSettings', tab: focusedTab });
+      }
       // @TODO: This must be a listener in the options page
       // const optionsView = getInternalViewByTabId(focusedTab.id);
       // if (optionsView && optionsView.exports) {
@@ -969,16 +961,16 @@ export const tgs = (function() {
       gsTabCheckManager.queueTabCheck(focusedTab, { refetchTab: false }, 0);
     }
 
-    //check for auto-unsuspend
+    // check for auto-unsuspend
     var autoUnsuspend = await gsStorage.getOption(gsStorage.UNSUSPEND_ON_FOCUS);
     if (autoUnsuspend) {
       if (navigator.onLine) {
         await unsuspendTab(focusedTab);
       }
       else {
-        getInternalContextByTabId(focusedTab.id, (context) => {
-          chrome.tabs.sendMessage(context.tabId, { action: 'showNoConnectivityMessage', tab: focusedTab });
-        });
+        if (await gsChrome.contextGetByTabId(focusedTab.id)) {
+          await chrome.tabs.sendMessage(focusedTab.id, { action: 'showNoConnectivityMessage', tab: focusedTab });
+        }
       }
     }
   }
@@ -1141,6 +1133,7 @@ export const tgs = (function() {
       callback(gsUtils.STATUS_NEVER);
       return;
     }
+
     getContentScriptStatus(tab.id, knownContentScriptStatus).then(
       async (contentScriptStatus) => {
         if ( contentScriptStatus && contentScriptStatus !== gsUtils.STATUS_NORMAL ) {
@@ -1220,6 +1213,7 @@ export const tgs = (function() {
 
   //HANDLERS FOR RIGHT-CLICK CONTEXT MENU
   function buildContextMenu(showContextMenu) {
+    /** @type { chrome.contextMenus.CreateProperties['contexts'] } */
     const allContexts = [ 'page', 'frame', 'editable', 'image', 'video', 'audio' ]; //'selection',
 
     if (!showContextMenu) {
@@ -1355,8 +1349,6 @@ export const tgs = (function() {
     setTabStatePropForTabId,
 
     initialiseTabContentScript,
-    getInternalContextByTabId,
-    getInternalContextsByViewName,
     requestNotice,
     clearNotice,
     buildContextMenu,
