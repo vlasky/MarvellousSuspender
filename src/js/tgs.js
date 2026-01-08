@@ -413,16 +413,49 @@ export const tgs = (function() {
     gsUtils.log( tab.id, 'tgs', 'resetAutoSuspendTimerForTab', timeToSuspend, new Date(when) );
   }
 
-  function resetAutoSuspendTimerForAllTabs() {
+  async function resetAutoSuspendTimerForAllTabs() {
     gsUtils.log(0, 'tgs', 'resetAutoSuspendTimerForAllTabs');
-    chrome.alarms.clearAll(() => {});
-    chrome.tabs.query({}, async (tabs) => {
-      for (const tab of tabs) {
-        if (gsUtils.isNormalTab(tab)) {
-          await resetAutoSuspendTimerForTab(tab);
+
+    // Clear all alarms once upfront
+    await chrome.alarms.clearAll();
+
+    // Pre-fetch settings and state to avoid repeated storage reads
+    const suspendTime = await gsStorage.getOption(gsStorage.SUSPEND_TIME);
+    if (isNaN(suspendTime) || suspendTime <= 0) {
+      return; // No timers needed if suspension is disabled
+    }
+
+    const ignoreActiveTabs = await gsStorage.getOption(gsStorage.IGNORE_ACTIVE_TABS);
+    const focusedWindowId = await gsStorage.getStorageJSON('session', 'gsCurrentFocusedWindowId');
+    const focusedTabByWindowId = await getCurrentFocusedTabIdByWindowId();
+
+    const tabs = await gsChrome.tabsQuery({});
+    const normalTabs = tabs.filter(tab => gsUtils.isNormalTab(tab));
+
+    const timeToSuspend = suspendTime * (1000 * 60);
+    const BATCH_SIZE = 15;
+
+    for (let i = 0; i < normalTabs.length; i += BATCH_SIZE) {
+      const batch = normalTabs.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async (tab) => {
+        // Inline check for protected active tab using cached values
+        const isFocusedTab = tab.windowId === focusedWindowId &&
+          (focusedTabByWindowId[tab.windowId] === tab.id || (!focusedTabByWindowId[tab.windowId] && tab.active));
+        const isProtected = isFocusedTab || (ignoreActiveTabs && tab.active);
+
+        if (isProtected) {
+          return;
         }
-      }
-    });
+
+        const when = Date.now() + timeToSuspend;
+        try {
+          await chrome.alarms.create(String(tab.id), { when });
+          gsUtils.log(tab.id, 'tgs', 'resetAutoSuspendTimerForTab', timeToSuspend, new Date(when));
+        } catch (error) {
+          gsUtils.warning(tab.id, 'chrome alarm create failed', error);
+        }
+      }));
+    }
   }
 
   async function clearAutoSuspendTimerForTabId(tabId) {
