@@ -140,24 +140,27 @@ export const gsSession = (function() {
     Open tabs:
     `, currentSessionTabs);
 
+    let tabsModified = false;
     if (chrome.extension.inIncognitoContext) {
       // do nothing if in incognito context
       // startupType = 'Incognito';
     } else if (gsStartupLastVersion === curVersion) {
       gsUtils.log('gsSession', 'HANDLING NORMAL STARTUP');
       // startupType = 'Restart';
-      await handleNormalStartup(currentSessionTabs, curVersion);
+      tabsModified = await handleNormalStartup(currentSessionTabs, curVersion);
     } else if (!gsStartupLastVersion || gsStartupLastVersion === '0.0.0') {
       gsUtils.log('gsSession', 'HANDLING NEW INSTALL');
       // startupType = 'Install';
       await handleNewInstall(curVersion);
+      tabsModified = true; // New install creates options tab
     } else {
       gsUtils.log('gsSession', 'HANDLING UPDATE');
       // startupType = 'Update';
-      await handleUpdate(currentSessionTabs, curVersion, gsStartupLastVersion);
+      tabsModified = await handleUpdate(currentSessionTabs, curVersion, gsStartupLastVersion);
     }
 
-    await performTabChecks();
+    // Only re-query tabs if they were modified during startup handling
+    await performTabChecks(tabsModified ? null : currentSessionTabs);
 
     // Ensure currently focused tab is initialised correctly if suspended
     const currentWindowActiveTabs = await gsChrome.tabsQuery({ active: true, currentWindow: true, });
@@ -170,7 +173,7 @@ export const gsSession = (function() {
   }
 
   //make sure the contentscript / suspended script of each tab is responsive
-  async function performTabChecks() {
+  async function performTabChecks(tabs) {
     const initStartTime = Date.now();
     gsUtils.log('gsSession',`
 
@@ -179,7 +182,8 @@ export const gsSession = (function() {
     ------------------------------------------------
     `);
 
-    const postRecoverySessionTabs = await gsChrome.tabsQuery();
+    // Use provided tabs or query if not provided (e.g., if recovery added new tabs)
+    const postRecoverySessionTabs = tabs || await gsChrome.tabsQuery();
     gsUtils.log( 'gsSession', 'postRecoverySessionTabs:', postRecoverySessionTabs );
 
     const tabCheckResults = await gsTabCheckManager.performInitialisationTabChecks( postRecoverySessionTabs );
@@ -198,6 +202,7 @@ export const gsSession = (function() {
     `);
   }
 
+  // Returns true if tabs were modified and a re-query is needed
   async function handleNormalStartup(currentSessionTabs, curVersion) {
     // "Normal" startup means the manifest version matches our last stored version
     // So, clear the UPDATE_AVAILABLE flag
@@ -223,8 +228,10 @@ export const gsSession = (function() {
         //the sessionUpdate code from running when this tab gains focus
         await gsUtils.setTimeout(2000);
       }
+      return true; // Tabs were modified
     } else {
       await gsIndexedDb.trimDbItems();
+      return false; // No tabs modified
     }
   }
 
@@ -245,6 +252,7 @@ export const gsSession = (function() {
     }
   }
 
+  // Returns true if tabs were modified and a re-query is needed
   async function handleUpdate(currentSessionTabs, curVersion, lastVersion) {
     gsUtils.log('gsSession', 'handleUpdate');
     gsStorage.setLastVersion(curVersion);
@@ -318,6 +326,7 @@ export const gsSession = (function() {
     if (gsUpdated) {
       await gsStorage.saveStorage('session', 'gsUpdated', gsUpdated);
     }
+    return true; // Update always modifies tabs (creates updated.html tab)
   }
 
   // This function is used only for testing
