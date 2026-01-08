@@ -19,10 +19,9 @@ import  { tgs }                   from './tgs.js';
     if (startupDone) return;
     startupDone = true;
 
-    tgs.resetAutoSuspendTimerForAllTabs();
-
     Promise.resolve()
       .then(gsStorage.initSettingsAsPromised)   // ensure settings have been loaded and synced
+      .then(tgs.resetAutoSuspendTimerForAllTabs) // reset timers after settings are ready
       .then(async () => { await gsStorage.saveStorage('session', 'gsInitialisationMode', true); })
       .then(gsSession.runStartupChecks)         // performs crash check (and maybe recovery) and tab responsiveness checks
       .catch(error => {
