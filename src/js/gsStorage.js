@@ -6,6 +6,13 @@ import  { gsUtils }               from './gsUtils.js';
 // In-memory cache for settings to avoid repeated storage reads
 let _settingsCache = null;
 
+// Invalidate cache if settings are modified externally (e.g., from another context)
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.gsSettings) {
+    _settingsCache = null;
+  }
+});
+
 export const gsStorage = {
   SCREEN_CAPTURE                : 'screenCapture',
   SCREEN_CAPTURE_FORCE          : 'screenCaptureForce',
@@ -275,7 +282,8 @@ export const gsStorage = {
 
   getSettings: async () => {
     if (_settingsCache) {
-      return _settingsCache;
+      // Return a shallow clone to prevent callers from mutating the cache
+      return { ..._settingsCache };
     }
     let settings = await gsStorage.getStorageJSON('local', 'gsSettings');
     if (!settings) {
@@ -283,7 +291,7 @@ export const gsStorage = {
       await gsStorage.saveSettings(settings);
     }
     _settingsCache = settings;
-    return settings;
+    return { ..._settingsCache };
   },
 
   saveSettings: async (settings) => {
