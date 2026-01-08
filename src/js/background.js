@@ -498,14 +498,24 @@ import  { tgs }                   from './tgs.js';
       //initialise currentStationary and currentFocused vars
       const activeTabs = await gsChrome.tabsQuery({ active: true });
       const currentWindow = await gsChrome.windowsGetLastFocused();
+
+      // Read maps once before loop, modify, then save once after
+      const stationaryTabByWindowId = await tgs.getCurrentStationaryTabIdByWindowId();
+      const focusedTabByWindowId = await tgs.getCurrentFocusedTabIdByWindowId();
+
       for (let activeTab of activeTabs) {
-        (await tgs.getCurrentStationaryTabIdByWindowId())[activeTab.windowId] = activeTab.id;
-        (await tgs.getCurrentFocusedTabIdByWindowId())[activeTab.windowId] = activeTab.id;
+        stationaryTabByWindowId[activeTab.windowId] = activeTab.id;
+        focusedTabByWindowId[activeTab.windowId] = activeTab.id;
         if (currentWindow && currentWindow.id === activeTab.windowId) {
           await tgs.setCurrentStationaryWindowId(activeTab.windowId);
           await tgs.setCurrentFocusedWindowId(activeTab.windowId);
         }
       }
+
+      // Save the accumulated maps once
+      await gsStorage.saveStorage('session', 'gsCurrentStationaryTabIdByWindowId', stationaryTabByWindowId);
+      await gsStorage.saveStorage('session', 'gsCurrentFocusedTabIdByWindowId', focusedTabByWindowId);
+
       gsUtils.log('background', 'init successful');
       resolve();
     });
