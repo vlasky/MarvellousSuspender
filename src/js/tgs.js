@@ -435,15 +435,12 @@ export const tgs = (function() {
     const timeToSuspend = suspendTime * (1000 * 60);
     const BATCH_SIZE = 15;
 
+    const protectedTabCache = { ignoreActiveTabs, focusedWindowId, focusedTabByWindowId };
+
     for (let i = 0; i < normalTabs.length; i += BATCH_SIZE) {
       const batch = normalTabs.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async (tab) => {
-        // Inline check for protected active tab using cached values
-        const isFocusedTab = tab.windowId === focusedWindowId &&
-          (focusedTabByWindowId[tab.windowId] === tab.id || (!focusedTabByWindowId[tab.windowId] && tab.active));
-        const isProtected = isFocusedTab || (ignoreActiveTabs && tab.active);
-
-        if (isProtected) {
+        if (gsUtils.isProtectedActiveTabSync(tab, protectedTabCache)) {
           return;
         }
 

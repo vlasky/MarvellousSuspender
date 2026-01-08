@@ -214,6 +214,14 @@ export const gsUtils = {
     return ( await tgs.isCurrentFocusedTab(tab) || (ignoreActiveTabs && tab.active) );
   },
 
+  // Synchronous version using pre-fetched values for batch processing
+  isProtectedActiveTabSync: (tab, { ignoreActiveTabs, focusedWindowId, focusedTabByWindowId }) => {
+    const isFocusedTab = tab.windowId === focusedWindowId &&
+      (focusedTabByWindowId[tab.windowId] === tab.id ||
+       (!focusedTabByWindowId[tab.windowId] && tab.active));
+    return isFocusedTab || (ignoreActiveTabs && tab.active);
+  },
+
   // Note: Normal tabs may be in a discarded state
   isNormalTab: function(tab, excludeDiscarded) {
     excludeDiscarded = excludeDiscarded || false;
