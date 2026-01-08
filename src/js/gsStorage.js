@@ -3,6 +3,9 @@ import  { gsUtils }               from './gsUtils.js';
 
 'use strict';
 
+// In-memory cache for settings to avoid repeated storage reads
+let _settingsCache = null;
+
 export const gsStorage = {
   SCREEN_CAPTURE                : 'screenCapture',
   SCREEN_CAPTURE_FORCE          : 'screenCaptureForce',
@@ -271,16 +274,20 @@ export const gsStorage = {
   },
 
   getSettings: async () => {
+    if (_settingsCache) {
+      return _settingsCache;
+    }
     let settings = await gsStorage.getStorageJSON('local', 'gsSettings');
     if (!settings) {
       settings = gsStorage.getSettingsDefaults();
       await gsStorage.saveSettings(settings);
     }
+    _settingsCache = settings;
     return settings;
   },
 
   saveSettings: async (settings) => {
-    // gsUtils.log(0, 'saveSettings');
+    _settingsCache = settings;
     return gsStorage.saveStorage('local', 'gsSettings', settings);
   },
 
